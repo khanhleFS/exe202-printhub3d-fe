@@ -1,18 +1,418 @@
-import { useState } from 'react';
-import { useRemote,useAction } from '../../hooks/useRemote';
-import { send } from '../../services/api';
+import { useState, useRef, useId } from 'react';
+import { useRemote, useAction } from '../../hooks/useRemote';
+import { send, uploadFormData } from '../../services/api';
 import type { OrderDTO } from '../../services/orderService';
-import { Panel,Card,RemoteState,Notice,Status,field,button } from '../../components/DataUI';
-interface Claim {id:string;orderId:string;description:string;imageUrl?:string;status:string;buyerName:string;createdAt:string}
-export default function WarrantyPanel({admin=false}:{admin?:boolean}){
-  const remote=useRemote<Claim[]>(admin?'/warranty/admin/claims':'/warranty/user/me');const orders=useRemote<OrderDTO[]>(admin?null:'/orders/me');const action=useAction(remote.reload);
-  const [orderId,setOrder]=useState('');const [description,setDescription]=useState('');const [imageUrl,setImage]=useState('');
-  return <Panel title={admin?'Xử lý bảo hành':'Yêu cầu bảo hành'}><Notice error={action.error}/>
-    {!admin&&<Card><form className="space-y-3" onSubmit={async e=>{e.preventDefault();if(await action.run(()=>send('/warranty/claim',{orderId,description,imageUrl}))){setDescription('');setImage('');}}}>
-      <label>Đơn đã hoàn thành<select required className={field} value={orderId} onChange={e=>setOrder(e.target.value)}><option value="">Chọn đơn hàng</option>{orders.data?.filter(o=>o.status==='COMPLETED').map(o=><option key={o.id} value={o.id}>{o.id} · {o.items.map(i=>i.productTitle).join(', ')}</option>)}</select></label><Notice error={orders.error}/>
-      <label>Mô tả lỗi<textarea className={field} required maxLength={4000} value={description} onChange={e=>setDescription(e.target.value)}/></label><label>URL ảnh bằng chứng<input type="url" className={field} value={imageUrl} onChange={e=>setImage(e.target.value)}/></label><button className={button} disabled={action.busy}>Gửi yêu cầu</button>
-    </form></Card>}
-    <RemoteState {...remote} empty={!remote.data?.length} retry={remote.reload}/>{remote.data?.map(c=><Card key={c.id}><p className="break-all">Đơn {c.orderId} · {c.buyerName}</p><Status value={c.status}/><p>{c.description}</p>{c.imageUrl&&<a className="text-emerald-300" href={c.imageUrl} target="_blank" rel="noreferrer">Xem ảnh bằng chứng</a>}
-      {admin&&<div className="flex gap-2">{(c.status==='PENDING'?['APPROVED','REJECTED']:c.status==='APPROVED'?['REPLACED']:[]).map(status=><button key={status} className={button} disabled={action.busy} onClick={()=>void action.run(()=>send(`/warranty/admin/claim/${c.id}/status`,{status},'put'))}><Status value={status}/></button>)}</div>}
-    </Card>)}</Panel>;
+import {
+  ShieldCheck,
+  UploadCloud,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  RefreshCw,
+  Image as ImageIcon,
+  AlertCircle,
+  Loader2,
+  Trash2,
+  ExternalLink,
+  Package,
+} from 'lucide-react';
+
+interface Claim {
+  id: string;
+  orderId: string;
+  description: string;
+  imageUrl?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REPLACED' | string;
+  buyerName: string;
+  createdAt: string;
+}
+
+export default function WarrantyPanel({ admin = false }: { admin?: boolean }) {
+  const remote = useRemote<Claim[]>(admin ? '/warranty/admin/claims' : '/warranty/user/me');
+  const orders = useRemote<OrderDTO[]>(admin ? null : '/orders/me');
+  const action = useAction(remote.reload);
+
+  const [orderId, setOrderId] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const orderSelectId = useId();
+  const descriptionId = useId();
+  const fileUploadId = useId();
+
+  // Xử lý upload ảnh qua Cloudinary API backend: POST /api/upload/image
+  const handleFileUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Vui lòng chọn định dạng file ảnh hợp lệ (PNG, JPG, JPEG, WEBP).');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('Dung lượng file ảnh quá lớn (tối đa 10MB).');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      // Gọi endpoint /upload/image đã có sẵn ở backend
+      const res = await uploadFormData<{ result: string } | string>('/upload/image', formData);
+      const uploadedUrl = typeof res === 'string' ? res : res?.result;
+      if (uploadedUrl) {
+        setImageUrl(uploadedUrl);
+      } else {
+        throw new Error('Không nhận được URL ảnh từ máy chủ.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Tải ảnh lên thất bại. Vui lòng thử lại.';
+      setUploadError(msg);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSubmitClaim = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!orderId) {
+      return;
+    }
+    const success = await action.run(() =>
+      send('/warranty/claim', { orderId, description: description.trim(), imageUrl })
+    );
+    if (success) {
+      setOrderId('');
+      setDescription('');
+      setImageUrl('');
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+            <Clock className="w-3.5 h-3.5" /> Chờ xét duyệt
+          </span>
+        );
+      case 'APPROVED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Đã chấp thuận
+          </span>
+        );
+      case 'REPLACED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+            <RefreshCw className="w-3.5 h-3.5" /> Đã in đổi mới
+          </span>
+        );
+      case 'REJECTED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30">
+            <XCircle className="w-3.5 h-3.5" /> Từ chối
+          </span>
+        );
+      default:
+        return <span className="text-xs text-slate-400">{status}</span>;
+    }
+  };
+
+  const completedOrders = orders.data?.filter((o) => o.status === 'COMPLETED') || [];
+
+  return (
+    <div className="space-y-8 w-full max-w-6xl mx-auto pb-12">
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-2.5 text-[#39FF14]">
+          <ShieldCheck className="w-7 h-7" />
+          <h1 className="text-2xl font-black text-white">
+            {admin ? 'Xử Lý Yêu Cầu Bảo Hành & Đổi Trả' : 'Trung Tâm Bảo Hành & Khiếu Nại Kỹ Thuật'}
+          </h1>
+        </div>
+        <p className="text-xs text-text-muted mt-1">
+          Chính sách in lại 1-1 đối với mô hình kỹ thuật bị sai lệch kích thước &gt;0.1mm, cong vênh vật liệu hoặc hư hại vận chuyển.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* CỘT TRÁI: FORM GỬI YÊU CẦU BẢO HÀNH (Chỉ cho Buyer) */}
+        {!admin && (
+          <div className="lg:col-span-5 p-6 rounded-2xl bg-surface border border-border space-y-5 shadow-xl">
+            <div className="border-b border-border/80 pb-3">
+              <h2 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wider">
+                <span>📝</span> Gửi Yêu Cầu Bảo Hành Mới
+              </h2>
+              <p className="text-[11px] text-text-muted mt-0.5">Áp dụng cho các đơn hàng đã nhận hoàn tất</p>
+            </div>
+
+            {action.error && (
+              <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{action.error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitClaim} className="space-y-4">
+              {/* Chọn đơn hàng */}
+              <div className="space-y-1.5">
+                <label htmlFor={orderSelectId} className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Package className="w-3.5 h-3.5 text-[#39FF14]" /> Chọn đơn hàng đã hoàn tất <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  id={orderSelectId}
+                  required
+                  value={orderId}
+                  onChange={(e) => setOrderId(e.target.value)}
+                  className="w-full bg-surface-inset border border-border rounded-xl p-3 text-xs text-white outline-none focus:border-[#39FF14] transition cursor-pointer"
+                >
+                  <option value="">-- Bấm để chọn đơn hàng gặp lỗi --</option>
+                  {completedOrders.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      Đơn #{o.id.substring(0, 8)} · {o.items.map((i) => i.productTitle).join(', ')}
+                    </option>
+                  ))}
+                </select>
+                {completedOrders.length === 0 && !orders.loading && (
+                  <p className="text-[11px] text-amber-400 font-medium">
+                    Bạn hiện chưa có đơn hàng nào ở trạng thái đã hoàn thành (COMPLETED).
+                  </p>
+                )}
+              </div>
+
+              {/* Mô tả chi tiết lỗi */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <label htmlFor={descriptionId} className="font-bold text-slate-300">
+                    Mô tả cụ thể lỗi kỹ thuật <span className="text-rose-400">*</span>
+                  </label>
+                  <span className="text-[11px] text-text-muted">{description.length}/4000</span>
+                </div>
+                <textarea
+                  id={descriptionId}
+                  required
+                  rows={4}
+                  maxLength={4000}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Mô tả cụ thể: Kích thước sai lệch, ngàm không khớp, nứt vỡ, cong vênh đáy..."
+                  className="w-full bg-surface-inset border border-border rounded-xl p-3 text-xs text-white outline-none focus:border-[#39FF14] resize-none transition"
+                />
+              </div>
+
+              {/* Tải ảnh chụp bằng chứng lỗi */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                  <label htmlFor={fileUploadId} className="flex items-center gap-1.5 cursor-pointer">
+                    <ImageIcon className="w-3.5 h-3.5 text-[#39FF14]" /> Ảnh chụp bằng chứng lỗi
+                  </label>
+                  <span className="text-[11px] text-text-muted font-normal">Tối đa 10MB</span>
+                </div>
+
+                {imageUrl ? (
+                  /* Khi đã có ảnh: Hiển thị preview */
+                  <div className="relative group rounded-xl overflow-hidden border border-[#39FF14]/50 bg-surface-inset">
+                    <img src={imageUrl} alt="Bằng chứng lỗi" className="w-full h-44 object-cover" />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      <a
+                        href={imageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2 rounded-lg bg-surface text-white hover:text-[#39FF14] transition"
+                        title="Xem ảnh gốc toàn màn hình"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl('')}
+                        className="p-2 rounded-lg bg-rose-950/80 text-rose-300 hover:text-white transition cursor-pointer"
+                        title="Xóa ảnh để chọn lại"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Khi chưa có ảnh: Dropzone upload file */
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 ${
+                      uploading
+                        ? 'border-border bg-surface-inset/50 cursor-wait'
+                        : 'border-border hover:border-[#39FF14] bg-surface-inset/30 hover:bg-surface-inset'
+                    }`}
+                  >
+                    <input
+                      id={fileUploadId}
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUpload(file);
+                      }}
+                    />
+                    {uploading ? (
+                      <>
+                        <Loader2 className="w-7 h-7 text-[#39FF14] animate-spin" />
+                        <span className="text-xs text-slate-300 font-bold">Đang tải ảnh lên Cloudinary...</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-[#39FF14]">
+                          <UploadCloud className="w-5 h-5" />
+                        </div>
+                        <span className="text-xs font-bold text-white">Bấm để tải ảnh chụp bằng chứng</span>
+                        <span className="text-[11px] text-text-muted">Hỗ trợ PNG, JPG, JPEG, WEBP</span>
+                      </>
+                    )}
+                  </div>
+                )}
+                {uploadError && <p className="text-[11px] text-rose-400 font-semibold">{uploadError}</p>}
+              </div>
+
+              {/* Nút gửi yêu cầu bảo hành */}
+              <button
+                type="submit"
+                disabled={action.busy || uploading || !orderId}
+                className="w-full py-3.5 rounded-xl bg-primary hover:bg-primary-hover text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 cursor-pointer mt-2"
+              >
+                {action.busy ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Đang gửi yêu cầu...
+                  </>
+                ) : (
+                  'Gửi Yêu Cầu Bảo Hành'
+                )}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* CỘT PHẢI: THEO DÕI CÁC YÊU CẦU BẢO HÀNH ĐÃ GỬI */}
+        <div className={admin ? 'lg:col-span-12 space-y-4' : 'lg:col-span-7 space-y-4'}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wider">
+              <span>📋</span> Danh Sách Yêu Cầu Bảo Hành ({remote.data?.length || 0})
+            </h2>
+            <button
+              type="button"
+              onClick={remote.reload}
+              className="text-xs text-text-muted hover:text-[#39FF14] flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Làm mới
+            </button>
+          </div>
+
+          {remote.loading && (
+            <div className="p-12 text-center text-slate-400 space-y-2">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#39FF14]" />
+              <p className="text-xs">Đang tải danh sách bảo hành...</p>
+            </div>
+          )}
+
+          {!remote.loading && (!remote.data || remote.data.length === 0) && (
+            <div className="p-12 rounded-2xl bg-surface border border-border text-center text-text-muted space-y-2 shadow-sm">
+              <ShieldCheck className="w-9 h-9 mx-auto text-slate-600" />
+              <p className="text-sm font-semibold text-slate-300">Chưa có yêu cầu bảo hành nào.</p>
+              <p className="text-xs max-w-sm mx-auto">
+                Khi nhận hàng nếu phát hiện sản phẩm bị lỗi kỹ thuật, hãy gửi yêu cầu để kỹ thuật viên hỗ trợ in đổi mới.
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-3.5">
+            {remote.data?.map((c) => (
+              <div
+                key={c.id}
+                className="p-5 rounded-2xl bg-surface border border-border/80 hover:border-border space-y-3 transition shadow-md"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <span className="text-xs font-mono font-bold text-slate-400">
+                      MÃ ĐƠN: <strong className="text-white font-mono">{c.orderId}</strong>
+                    </span>
+                    <p className="text-xs text-text-muted mt-0.5">Khách hàng: {c.buyerName}</p>
+                  </div>
+                  <div>{getStatusBadge(c.status)}</div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-surface-inset text-xs text-slate-300 leading-relaxed">
+                  <span className="font-bold text-slate-200">Mô tả sự cố: </span>
+                  {c.description}
+                </div>
+
+                {c.imageUrl && (
+                  <div className="flex items-center gap-2 text-xs pt-1">
+                    <span className="text-text-muted">Bằng chứng lỗi:</span>
+                    <a
+                      href={c.imageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#39FF14] hover:underline font-semibold flex items-center gap-1"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" /> Xem ảnh chụp phóng to
+                    </a>
+                  </div>
+                )}
+
+                {/* Hành động duyệt của Admin */}
+                {admin && (
+                  <div className="pt-3 border-t border-border flex items-center gap-2">
+                    {c.status === 'PENDING' && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={action.busy}
+                          onClick={() =>
+                            void action.run(() =>
+                              send(`/warranty/admin/claim/${c.id}/status`, { status: 'APPROVED' }, 'put')
+                            )
+                          }
+                          className="py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition cursor-pointer"
+                        >
+                          Duyệt bảo hành
+                        </button>
+                        <button
+                          type="button"
+                          disabled={action.busy}
+                          onClick={() =>
+                            void action.run(() =>
+                              send(`/warranty/admin/claim/${c.id}/status`, { status: 'REJECTED' }, 'put')
+                            )
+                          }
+                          className="py-1.5 px-3 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs transition cursor-pointer"
+                        >
+                          Từ chối
+                        </button>
+                      </>
+                    )}
+                    {c.status === 'APPROVED' && (
+                      <button
+                        type="button"
+                        disabled={action.busy}
+                        onClick={() =>
+                          void action.run(() =>
+                            send(`/warranty/admin/claim/${c.id}/status`, { status: 'REPLACED' }, 'put')
+                          )
+                        }
+                        className="py-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition cursor-pointer"
+                      >
+                        Xác nhận đã in đổi mới
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

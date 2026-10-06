@@ -63,6 +63,13 @@ export async function send<T = void>(path: string, data?: unknown, method: 'post
   return unwrap<T>((await api.request({ url: path, method, data })).data);
 }
 
+export async function uploadFormData<T = unknown>(endpoint: string, formData: FormData): Promise<T> {
+  const res = await api.post(endpoint, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return unwrap<T>(res.data);
+}
+
 export function errorText(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const body = error.response?.data;

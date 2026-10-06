@@ -25,7 +25,7 @@ interface UserSidebarProps {
   onOpenAddressModal: () => void;
 }
 
-export default function UserSidebar({ isOpen, onOpenAddressModal }: UserSidebarProps) {
+export default function UserSidebar({ isOpen, onOpenAddressModal: _onOpenAddressModal }: UserSidebarProps) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -42,7 +42,7 @@ export default function UserSidebar({ isOpen, onOpenAddressModal }: UserSidebarP
     ? 'shopping'
     : ['/orders', '/order-history', '/file-vault', '/quotations', '/subscriptions'].includes(location.pathname)
       ? 'transactions'
-      : ['/profile', '/warranty', '/disputes', '/help-center'].includes(location.pathname)
+      : ['/profile', '/addresses', '/warranty', '/disputes', '/help-center'].includes(location.pathname)
         ? 'account'
         : null;
 
@@ -304,17 +304,18 @@ export default function UserSidebar({ isOpen, onOpenAddressModal }: UserSidebarP
                 <span>Trang cá nhân</span>
               </Link>
 
-              <button
-                type="button"
-                className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-300 hover:bg-surface hover:text-white transition cursor-pointer text-left"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onOpenAddressModal();
-                }}
+              <Link
+                to="/addresses"
+                aria-current={isActive('/addresses') ? 'page' : undefined}
+                className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                  isActive('/addresses')
+                    ? 'bg-surface text-[#39FF14] border-l-4 border-[#39FF14] font-bold shadow-md'
+                    : 'text-slate-300 hover:bg-surface hover:text-white'
+                }`}
               >
                 <MapPin className="w-4 h-4 text-text-muted shrink-0" />
                 <span>Sổ địa chỉ nhận hàng</span>
-              </button>
+              </Link>
 
               <Link
                 to="/warranty"

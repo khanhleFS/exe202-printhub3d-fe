@@ -3,8 +3,8 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import type { User, UserRole } from '../types';
 import { authService } from '../services/authService';
 import { read, send, unwrap } from '../services/api';
-interface Profile { id: string; fullName: string; email: string; phone: string; address: string; role: 'USER' | 'ADMIN'; studentId?: string; university?: string }
-function mapUser(p: Profile): User { return { id: p.id, name: p.fullName, email: p.email, phone: p.phone || '', address: p.address || '', role: p.role === 'ADMIN' ? 'ADMIN' : 'BUYER', studentId: p.studentId, university: p.university, isVerified: true, hasPasscode: false, isLocked: false }; }
+interface Profile { id: string; fullName: string; email: string; phone: string; address: string; role: 'USER' | 'ADMIN'; studentId?: string; university?: string; rewardPoints?: number }
+function mapUser(p: Profile): User { return { id: p.id, name: p.fullName, email: p.email, phone: p.phone || '', address: p.address || '', role: p.role === 'ADMIN' ? 'ADMIN' : 'BUYER', studentId: p.studentId, university: p.university, isVerified: true, hasPasscode: false, isLocked: false, rewardPoints: p.rewardPoints ?? 0 }; }
 interface AuthContextType {
   user: User | null; role: UserRole; isAuthenticated: boolean; isLoading: boolean;
   login: (name: string, password?: string) => Promise<UserRole>; logout: () => Promise<void>;

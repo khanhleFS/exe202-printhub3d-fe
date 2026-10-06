@@ -35,6 +35,7 @@ const WarrantyPage = lazy(() => import('../pages/WarrantyPage'));
 const DisputesPage = lazy(() => import('../pages/DisputesPage'));
 const Ruler3DPage = lazy(() => import('../pages/Ruler3DPage'));
 const ProfilePage = lazy(() => import('../pages/ProfilePage'));
+const AddressBookPage = lazy(() => import('../pages/AddressBookPage'));
 
 // Admin Pages
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
@@ -313,6 +314,18 @@ export default function AppRoutes({
               <AnimatePresence mode="wait">
                 <PageTransition key={location.pathname}>
                   <ProfilePage />
+                </PageTransition>
+              </AnimatePresence>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/addresses"
+          element={
+            <ProtectedRoute allowedRoles={['BUYER', 'ADMIN']}>
+              <AnimatePresence mode="wait">
+                <PageTransition key={location.pathname}>
+                  <AddressBookPage />
                 </PageTransition>
               </AnimatePresence>
             </ProtectedRoute>

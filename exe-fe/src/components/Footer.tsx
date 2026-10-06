@@ -32,7 +32,7 @@ export default function Footer() {
             <div className="space-y-2 pt-1 text-slate-300">
               <div className="flex items-center gap-2.5">
                 <Phone className="w-4 h-4 text-[#39FF14] shrink-0" />
-                <span>Hotline: <strong className="text-white font-mono">0987.654.321</strong> (Hỗ trợ 8h - 22h)</span>
+                <span>Hotline: <strong className="text-white font-mono">0786954657</strong> (Hỗ trợ 8h - 22h)</span>
               </div>
               <div className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4 text-[#39FF14] shrink-0" />
@@ -40,7 +40,7 @@ export default function Footer() {
               </div>
               <div className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-[#39FF14] shrink-0 mt-0.5" />
-                <span>Địa chỉ: Trung Tâm In 3D PrintHub Lab, Làng Đại Học Quốc Gia TP.HCM</span>
+                <span>Địa chỉ: Làng đại học, đại học Quốc Gia TP. Hồ Chí Minh.</span>
               </div>
             </div>
 
@@ -181,9 +181,6 @@ export default function Footer() {
         <div className="mt-10 pt-6 border-t border-border/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left text-slate-400">
           <p className="text-xs">
             &copy; {currentYear} <span className="text-white font-bold">PrintHub 3D</span>. Tất cả quyền được bảo lưu.
-          </p>
-          <p className="text-[11px] text-slate-400">
-            Dự án nghiên cứu &amp; chế tác mô hình kỹ thuật sinh viên EXE202.
           </p>
         </div>
       </div>

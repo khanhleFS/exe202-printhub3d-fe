@@ -14,6 +14,7 @@ export interface User {
   hasPasscode: boolean;
   isLocked?: boolean;
   lockReason?: string;
+  rewardPoints?: number;
 }
 
 export interface Product {
