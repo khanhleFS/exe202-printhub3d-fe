@@ -16,7 +16,7 @@ interface Plan {
 
 interface Membership {
   points: number;
-  subscriptions: { id: string; name: string; endDate: string }[];
+  subscriptions: { id?: string; subscriptionId?: string; name?: string; planName?: string; endDate: string }[];
 }
 
 interface AdminUserItem {
@@ -96,11 +96,11 @@ export default function SubscriptionPanel({ admin = false }: { admin?: boolean }
             {membership.data.subscriptions.length === 0 ? (
               <p className="text-xs text-text-muted">Bạn chưa kích hoạt gói hội viên nào.</p>
             ) : (
-              membership.data.subscriptions.map((s) => (
-                <div key={s.id} className="flex items-center gap-2 text-xs font-semibold text-white">
+              membership.data.subscriptions.map((s, idx) => (
+                <div key={s.subscriptionId || s.id || idx} className="flex items-center gap-2 text-xs font-semibold text-white">
                   <Sparkles className="w-4 h-4 text-purple-400" />
                   <span>
-                    {s.name} · Hạn dùng đến: {new Date(s.endDate).toLocaleDateString('vi-VN')}
+                    {s.planName || s.name} · Hạn dùng đến: {new Date(s.endDate).toLocaleDateString('vi-VN')}
                   </span>
                 </div>
               ))
